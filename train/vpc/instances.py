@@ -28,6 +28,22 @@ def _create_tags(conn, instance, current, lab_tag, user, amibuild, amikey, scrip
 
     conn.create_tags(current.id, tags)
 
+def _add_ingress_rules(conn, user_vpc, security_groups):
+    """Add the external IP for this instance to the ingress rules of the default security group"""
+
+    instances = get_vpc_instances(conn, user_vpc)
+
+    # find our default security group ...
+    for secgroup in security_groups:
+        if 'Name' in secgroup.tags:
+            if '-default' in secgroup.tags['Name']:
+                # ... and add the ingress rules for each instance
+                print 'Adding external IP of each instance to default security group ingress rules ...'
+                for instance in instances:
+                    secgroup.authorize(ip_protocol='-1',
+                                       from_port='-1',
+                                       to_port='-1',
+                                       cidr_ip=instance.ip_address + '/32')
 
 def _check_name_tag(conn, user_vpc, instance):
     """Check for existing name tag"""
@@ -276,6 +292,9 @@ def launch_instances(conn, user_vpc, script, lab,
         #_create_elastic_ips(conn, instance[0], instance[1], instance[2])
         _create_tags(conn, instance[0], instance[1], lab_tag,
                       instance[2], instance[3], instance[4], instance[5])
+
+    # add ingress rules for each instance to the default security group
+    _add_ingress_rules(conn, user_vpc, security_groups)
 
     final = labs.get_lab_instance_info(conn, user_vpc, lab_tag)
     output_user_files(conn, user_vpc, lab_tag)
